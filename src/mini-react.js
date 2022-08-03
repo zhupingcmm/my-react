@@ -204,7 +204,6 @@ const performUnitOfWork = (fiberNode) => {
   const { type } = fiberNode;
   switch (typeof type) {
     case 'function':
-      console.log('function');
       wipFiber = fiberNode;
       wipFiber.hooks = [];
       hookIndex = 0;
