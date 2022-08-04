@@ -5,6 +5,9 @@ let deletions = [];
 let wipFiber;
 let hookIndex = 0;
 
+// Support React.Fragment syntax.
+const Fragment = Symbol.for('react.fragment');
+
 // Enhanced requestIdleCallback.
 ((global) => {
   const id = 1;
@@ -42,6 +45,8 @@ const isPlainObject = (obj) =>
 // Simple judgment of virtual elements.
 const isVirtualElement = (e) => typeof e === 'object';
 
+const isDef = (param) => param !== void 0 && param !== null;
+
 const createTextElement = (text) => ({
   type: 'TEXT',
   props: {
@@ -64,7 +69,7 @@ const updateDom = (dom, preProps, nextProps) => {
 
   for (const [addKey, addValue] of Object.entries(nextProps)) {
     if (addKey.startsWith('on')) {
-      dom.addEventListener(addKey.slice(2).toLocaleLowerCase(), addKey);
+      dom.addEventListener(addKey.slice(2).toLocaleLowerCase(), addValue);
     } else if (addKey !== defaultKeys) {
       dom[addKey] = addValue;
     }
@@ -104,10 +109,10 @@ const createElement = (type, props = {}, ...child) => {
 const reconcileChildren = (fiberNode, children = []) => {
   let index = 0;
   let oldFiberNode = void 0;
-  let preSibling = void 0;
+  let prevSibling = void 0;
   const virtualElements = children.flat(Infinity);
 
-  if (fiberNode.alternate && fiberNode.alternate.children) {
+  if (fiberNode.alternate && fiberNode.alternate.child) {
     oldFiberNode = fiberNode.alternate.child;
   }
 
@@ -117,7 +122,6 @@ const reconcileChildren = (fiberNode, children = []) => {
   ) {
     const virtualElement = virtualElements[index];
     let newFiber = void 0;
-    // let prevSibling = void 0;
     const isSameType = Boolean(
       oldFiberNode &&
         virtualElement &&
@@ -157,11 +161,10 @@ const reconcileChildren = (fiberNode, children = []) => {
     if (index === 0) {
       fiberNode.child = newFiber;
     } else if (typeof prevSibling !== 'undefined') {
-      preSibling.sibling = newFiber;
+      prevSibling.sibling = newFiber;
     }
 
-    preSibling = newFiber;
-
+    prevSibling = newFiber;
     index += 1;
   }
 };
@@ -182,6 +185,7 @@ const useState = (initialState) => {
     wipFiber.hooks = [];
   }
 
+  wipFiber.hooks.push(hook);
   hookIndex += 1;
 
   const setState = (val) => {
@@ -190,7 +194,7 @@ const useState = (initialState) => {
       wipRoot = {
         type: currentRoot.type,
         dom: currentRoot.dom,
-        props: currentRoot.preProps,
+        props: currentRoot.props,
         alternate: currentRoot,
       };
       nextUnitOfWork = wipRoot;
@@ -233,15 +237,17 @@ const performUnitOfWork = (fiberNode) => {
       if (!fiberNode.dom) {
         fiberNode.dom = createDom(fiberNode);
       }
-      reconcileChildren(
-        fiberNode,
-        isPlainObject(fiberNode.props.children)
-          ? [fiberNode.props.children]
-          : fiberNode.props.children,
-      );
+      reconcileChildren(fiberNode, fiberNode.props.children);
+      break;
+    case 'symbol':
+      if (type === Fragment) {
+        reconcileChildren(fiberNode, fiberNode.props.children);
+      }
       break;
     default:
-      console.log('===');
+      if (typeof fiberNode.props !== 'undefined') {
+        reconcileChildren(fiberNode, fiberNode.preProps.children);
+      }
   }
 
   if (fiberNode.child) {
@@ -259,16 +265,83 @@ const performUnitOfWork = (fiberNode) => {
   return null;
 };
 
+const commitRoot = () => {
+  const findParentFiber = (fiberNode) => {
+    if (fiberNode) {
+      let parentFiber = fiberNode.return;
+      while (parentFiber && !parentFiber.dom) {
+        parentFiber = parentFiber.return;
+      }
+
+      return parentFiber;
+    }
+    return null;
+  };
+  const commitReplacement = (parentDom, dom) => {
+    if (isDef(parentDom)) {
+      parentDom.appendChild(dom);
+    }
+  };
+
+  const commitDeletion = (parentDom, dom) => {
+    if (isDef(parentDom)) {
+      parentDom.removeChild(dom);
+    }
+  };
+  const commitWork = (fiberNode) => {
+    if (fiberNode) {
+      if (fiberNode.dom) {
+        const parentFiber = findParentFiber(fiberNode);
+        const parentDom = parentFiber?.dom;
+        switch (fiberNode.effectTag) {
+          case 'REPLACEMENT':
+            commitReplacement(parentDom, fiberNode.dom);
+            break;
+          case 'UPDATE':
+            updateDom(
+              fiberNode.dom,
+              fiberNode.alternate ? fiberNode.alternate.props : {},
+              fiberNode.props,
+            );
+            break;
+          default:
+            break;
+        }
+      }
+
+      commitWork(fiberNode.child);
+      commitWork(fiberNode.sibling);
+    }
+  };
+
+  for (const deletion of deletions) {
+    if (deletion.dom) {
+      const parentFiber = findParentFiber(deletion);
+      commitDeletion(parentFiber.dom, deletion.dom);
+    }
+  }
+
+  if (wipRoot !== null) {
+    commitWork(wipRoot.child);
+    currentRoot = wipRoot;
+  }
+  wipRoot = null;
+};
+
 const workLoop = (deadline) => {
   // console.log(deadline.timeRemaining());
   while (nextUnitOfWork && deadline.timeRemaining() > 1) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
   }
+
+  if (!nextUnitOfWork && wipRoot) {
+    console.log('wipRoot::', wipRoot);
+    commitRoot();
+  }
   window.requestIdleCallback(workLoop);
 };
 
 const render = (element, container) => {
-  console.log('ele', element, container);
   currentRoot = null;
   wipRoot = {
     type: 'div',
