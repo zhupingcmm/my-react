@@ -327,22 +327,31 @@ const commitRoot = () => {
   }
   wipRoot = null;
 };
-
+/**
+ *
+ * @param {*} deadline 有2个返回值 1. didTimeout: 表示requestIdleCallback 是否过期 2.timeRemaining 函数 这一针还剩余多长时间
+ * 遍历和构件fiber tree
+ * 提交改动
+ */
 const workLoop = (deadline) => {
-  // console.log(deadline.timeRemaining());
   while (nextUnitOfWork && deadline.timeRemaining() > 1) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
   }
 
   if (!nextUnitOfWork && wipRoot) {
-    console.log('wipRoot::', wipRoot);
     commitRoot();
   }
   window.requestIdleCallback(workLoop);
 };
 
+/**
+ * @param {*} element 第一个节点
+ * @param {*} container 挂载的根节点 <div id ='root'/>
+ */
 const render = (element, container) => {
+  // 设置currentRoot 为 null
   currentRoot = null;
+  // 初始化 wipRoot
   wipRoot = {
     type: 'div',
     dom: container,
@@ -355,7 +364,9 @@ const render = (element, container) => {
     },
     alternate: currentRoot,
   };
+
   nextUnitOfWork = wipRoot;
+  // 初始化 deletions
   deletions = [];
 };
 
