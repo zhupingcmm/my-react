@@ -106,6 +106,17 @@ const createElement = (type, props = {}, ...child) => {
   };
 };
 
+/**
+ * 调和子节点，遍历当前fiberNode子节点，标注effectTag
+ * 新  旧
+ * Y   Y  update
+ * Y   N  replacement
+ * N   Y  delete
+ * N   N  不用考虑
+ * @param {*} fiberNode 当前调和的fiber节点
+ * @param {*} children 当前fiber节点的子节点
+ *
+ */
 const reconcileChildren = (fiberNode, children = []) => {
   let index = 0;
   let oldFiberNode = void 0;
@@ -204,6 +215,14 @@ const useState = (initialState) => {
   };
   return [hook.state, setState];
 };
+
+/**
+ * 儿子节点是第一优先级
+ * 兄弟节点是第二优先级
+ * 返回父亲节点，
+ * @param {*} fiberNode 当前节点
+ * @returns 下一个fiberNode
+ */
 const performUnitOfWork = (fiberNode) => {
   const { type } = fiberNode;
   switch (typeof type) {
@@ -218,6 +237,8 @@ const performUnitOfWork = (fiberNode) => {
         const component = new C(fiberNode.preProps);
         // eslint-disable-next-line react-hooks/rules-of-hooks
         const [state, setState] = useState(component.state);
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        // useEffect(() => {}, [])
 
         component.props = fiberNode.props;
         component.state = state;
@@ -308,7 +329,6 @@ const commitRoot = () => {
             break;
         }
       }
-
       commitWork(fiberNode.child);
       commitWork(fiberNode.sibling);
     }

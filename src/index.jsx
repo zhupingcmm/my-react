@@ -1,5 +1,9 @@
 import React from './mini-react.js';
 
+const Demo = (props) => {
+  const { count } = props;
+  return <div>{count}</div>;
+};
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -22,7 +26,8 @@ class App extends React.Component {
             >
               Add
             </button>
-            <span>{count}</span>
+            <Demo count={count} />
+            {/* <span>{count}</span> */}
           </div>
         </div>
       </div>
